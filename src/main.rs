@@ -1,171 +1,121 @@
-use std::io;
+use crossterm::event::{self, Event};
+use ratatui::{DefaultTerminal, Frame};
 
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
-use ratatui::{
-    buffer::Buffer,
-    layout::Rect,
-    style::Stylize,
-    symbols::border,
-    text::{Line, Text},
-    widgets::{Block, Paragraph, Widget},
-    DefaultTerminal, Frame,
-};
+fn main() -> Result<()> {
+    color_eyre::install()?;
 
-#[derive(Debug, Default)]
-pub struct App {
-    counter: u8,
-    exit: bool,
+    let terminal = ratatui::init();
+
+    let app_result = App::new().run(terminal);
+}
+
+struct App {
+    input: String,
+    charactor_index: usize,
+    input_mode: InputMode,
+    messages: Vec<String>,
+}
+
+enum InputMode {
+    Normal,
+    Editing,
 }
 
 impl App {
-    pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
-        while !self.exit {
+    const fn new() -> Self {
+        Self {
+            input: String::new(),
+            input_mode: InputMode::Normal,
+            messages: Vec::new(),
+            charactor_index: 0,
+        }
+    }
+
+    fn move_cursor_left(&mut self) {
+        let cursor_moved_left = self.charactor_index.saturating_sub(1);
+
+        self.charactor_index = self.clamp_cursor(cursor_moved_left);
+    }
+
+    fn move_cursor_right(&mut self) {
+        let cursor_moved_right = self.charactor_index.saturating_add(1);
+
+        self.charactor_index = self.clamp_cursor(cursor_moved_right);
+    }
+
+    fn enter_char(&mut self, new_char: char) {
+        let index = self.byte_index();
+
+        self.input.insert(index, new_char);
+
+        self.move_cursor_right();
+    }
+
+    fn byte_index(&mut self) -> usize {
+        self.input
+            .char_indices()
+            .map(|(i, _)| i)
+            .nth(self.charactor_index)
+            .unwrap_or(self.input.len())
+    }
+
+    fn delete_char(&mut self) {
+        let is_not_cursor_leftmost = self.charactor_index != 0;
+
+        if is_not_cursor_leftmost {
+            let current_index = self.charactor_index;
+
+            let from_left_to_current_index = current_index - 1;
+
+            let before_char_to_delete = self.input.chars().take(from_left_to_current_index);
+
+            let after_char_to_delete = self.input.chars().skip(current_index);
+
+            self.input = before_char_to_delete.chain(after_char_to_delete).collect();
+
+            self.move_cursor_left();
+        }
+    }
+
+    fn clamp_cursor(&mut self, new_cursor_pos: usize) -> usize {
+        new_cursor_pos.clamp(0, self.input.chars().count())
+    }
+
+    fn reset_cursor(&mut self) {
+        self.charactor_index = 0;
+    }
+
+    fn submit_message(&mut self) {
+        self.messages.push(self.input.clone());
+        self.input.clear();
+        self.reset_cursor();
+    }
+
+    fn run(mut self, mut terminal: DefaultTerminal) -> Result<()> {
+        loop {
             terminal.draw(|frame| self.draw(frame))?;
 
-            self.handle_events()?;
-        }
-        Ok(())
-    }
+            if let Event::Key(key) = event::read()? {
+                match self.input_mode {
+                    InputMode::Normal => match key.code {
+                        _ => {
+                            todo!()
+                        }
+                    },
 
-    fn draw(&self, frame: &mut Frame) {
-        frame.render_widget(self, frame.area());
-    }
+                    InputMode::Editing => {
+                        todo!()
+                    }
 
-    fn handle_key_event(&mut self, key_event: KeyEvent) {
-        match key_event.code {
-            KeyCode::Char('q') => self.exit(),
-            KeyCode::Left => self.decrement_counter(),
-            KeyCode::Right => self.increment_counter(),
-            _ => {
-                todo!()
+                    _ => {
+                        todo!()
+                    }
+                }
             }
         }
     }
 
-    fn handle_events(&mut self) -> io::Result<()> {
-        match event::read()? {
-            Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
-                self.handle_key_event(key_event);
-            }
-
-            _ => {
-                todo!()
-            }
-        };
-
-        Ok(())
-    }
-
-    fn decrement_counter(&mut self) {
-        self.counter -= 1;
-    }
-
-    fn increment_counter(&mut self) {
-        self.counter += 1;
-    }
-
-    fn exit(&mut self) {
-        self.exit = true;
-    }
-}
-
-impl Widget for &App {
-    fn render(self, area: Rect, buf: &mut Buffer) {
-        let title = Line::from(" Counter App Tutorial ".bold());
-
-        let instructions = Line::from(vec![
-            " Decrement ".into(),
-            "<Left>".blue().bold(),
-            " Increment ".into(),
-            "<Right>".blue().bold(),
-            " Quit ".into(),
-            "<Q> ".blue().bold(),
-        ]);
-
-        let block = Block::bordered()
-            .title(title.centered())
-            .title_bottom(instructions.centered())
-            .border_set(border::THICK);
-
-        let counter_text = Text::from(vec![Line::from(vec![
-            "Value: ".into(),
-            self.counter.to_string().yellow(),
-        ])]);
-
-        Paragraph::new(counter_text)
-            .centered()
-            .block(block)
-            .render(area, buf);
-    }
-}
-
-fn main() -> io::Result<()> {
-    let mut terminal = ratatui::init();
-
-    let app_result = App::default().run(&mut terminal);
-
-    ratatui::restore();
-
-    app_result
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use ratatui::style::Style;
-
-    #[test]
-    fn render() {
-        let app = App::default();
-
-        let mut buf = Buffer::empty(Rect::new(0, 0, 50, 4));
-
-        app.render(buf.area, &mut buf);
-
-        let mut expected = Buffer::with_lines(vec![
-            "┏━━━━━━━━━━━━━ Counter App Tutorial ━━━━━━━━━━━━━┓",
-            "┃                    Value: 0                    ┃",
-            "┃                                                ┃",
-            "┗━ Decrement <Left> Increment <Right> Quit <Q> ━━┛",
-        ]);
-
-        let title_style = Style::new().bold();
-
-        let counter_style = Style::new().yellow();
-
-        let key_style = Style::new().blue().bold();
-
-        expected.set_style(Rect::new(14, 0, 22, 1), title_style);
-
-        expected.set_style(Rect::new(28, 1, 1, 1), counter_style);
-
-        expected.set_style(Rect::new(13, 3, 6, 1), key_style);
-
-        expected.set_style(Rect::new(30, 3, 7, 1), key_style);
-
-        expected.set_style(Rect::new(43, 3, 4, 1), key_style);
-
-        assert_eq!(buf, expected);
-    }
-
-    #[test]
-    fn handle_key_event() -> io::Result<()> {
-        let mut app = App::default();
-
-        app.handle_key_event(KeyCode::Right.into());
-
-        assert_eq!(app.counter, 1);
-
-        app.handle_key_event(KeyCode::Left.into());
-
-        assert_eq!(app.counter, 0);
-
-        let mut app = App::default();
-
-        app.handle_key_event(KeyCode::Char('q').into());
-
-        assert!(app.exit);
-
-        Ok(())
+    fn draw(&mut self, frame: &mut Frame) {
+        todo!()
     }
 }
