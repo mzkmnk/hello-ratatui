@@ -106,6 +106,24 @@ impl App {
         loop {
             terminal.draw(|frame| self.draw(frame))?;
 
+            // if letはmatchの省略コード
+
+            // match event::read()? {
+            //     Event::Key(key) => match self.input_mode {
+            //         InputMode::Normal => {
+
+            //             // todo
+
+            //         }
+            //         InputMode::Editing => {
+
+            //             //todo
+
+            //         }
+            //     },
+            //     _ => {}
+            // }
+
             if let Event::Key(key) = event::read()? {
                 match self.input_mode {
                     InputMode::Normal => match key.code {
@@ -115,6 +133,10 @@ impl App {
                         }
                         _ => {}
                     },
+
+                    // pattern guard
+
+                    // 
 
                     InputMode::Editing if key.kind == KeyEventKind::Press => match key.code {
                         KeyCode::Enter => self.submit_message(),
