@@ -1,5 +1,3 @@
-use std::fmt::format;
-
 use color_eyre::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::{
